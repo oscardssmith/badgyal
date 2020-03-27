@@ -6,6 +6,7 @@ import chess
 from badgyal.board2planes import board2planes, policy2moves, bulk_board2planes
 import pylru
 import sys
+import os
 
 
 
@@ -15,7 +16,6 @@ MIN_POLICY=0.2
 
 
 class AbstractNet:
-
     def __init__(self, cuda=True):
         self.net = self.load_net()
         self.cuda = cuda
@@ -26,11 +26,11 @@ class AbstractNet:
         self.prefetch = {}
 
     def process_boards(self, boards):
-        input = bulk_board2planes(boards)
+        boards = bulk_board2planes(boards)
         if self.cuda:
-            input = input.cuda()
+            boards = boards.cuda()
         with torch.no_grad():
-            policies, values = self.net(input)
+            policies, values = self.net(boards)
             return policies, values
 
     def cache_boards(self, boards, softmax_temp=1.61):
@@ -86,3 +86,30 @@ class AbstractNet:
 
         # return the values
         return policy, value
+
+class LoadedNet(AbstractNet):
+    def __init__(self, path, channels=128, blocks=10, se=4, policy_channels=None, classical=True, cuda=True):
+        self.path = path
+        self.channels = channels
+        self.blocks = blocks
+        self.se = se
+        if policy_channels == None:
+            self.policy_channels = channels
+        else:
+            self.policy_channels = policy_channels
+        self.classical = classical
+        super().__init__(cuda=cuda)
+        
+    def load_net(self):
+        cwd = os.path.abspath(os.path.dirname(__file__))
+        full_path = os.path.join(cwd, self.path)
+        net = model.Net(self.channels,
+                        self.blocks,
+                        self.policy_channels,
+                        self.se,
+                        classical=self.classical)
+        if self.classical:
+            net.import_proto_classical(full_path)
+        else:
+            net.import_proto(full_path)
+        return net
