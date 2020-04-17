@@ -10,12 +10,13 @@ import os
 
 
 
-CACHE=40000
+CACHE=100000
 MAX_BATCH = 8
 MIN_POLICY=0.2
 
 
 class AbstractNet:
+
     def __init__(self, cuda=True):
         self.net = self.load_net()
         self.cuda = cuda
@@ -26,12 +27,12 @@ class AbstractNet:
         self.prefetch = {}
 
     def process_boards(self, boards):
-        boards = bulk_board2planes(boards)
+        input = bulk_board2planes(boards)
         if self.cuda:
-            boards = boards.cuda()
+            input = input.pin_memory().cuda(non_blocking = True)
         with torch.no_grad():
-            policies, values = self.net(boards)
-            return policies, values
+            policies, values = self.net(input)
+            return policies.cpu(), values.cpu()
 
     def cache_boards(self, boards, softmax_temp=1.61):
         for b in boards:
@@ -45,9 +46,20 @@ class AbstractNet:
                 for i, b in enumerate(self.prefetch.values()):
                     inp = policies[i].unsqueeze(dim=0)
                     policy = policy2moves(b, inp, softmax_temp=softmax_temp)
-                    value = values[i].item()
+                    value = values[i]
+                    value = self.value_to_scalar(value)
                     self.cache[b.epd()] = [policy, value]
             self.prefetch = {}
+
+    def cache_eval(self, board):
+        epd = board.epd()
+        if epd in self.cache:
+            return self.cache[epd]
+        else:
+            return None, None
+
+    def value_to_scalar(self, value):
+        return value.item()
 
     def eval(self, board, softmax_temp=1.61):
         epd = board.epd()
@@ -64,7 +76,8 @@ class AbstractNet:
                 for i, b in enumerate(boards):
                     inp = policies[i].unsqueeze(dim=0)
                     policy = policy2moves(b, inp, softmax_temp=softmax_temp)
-                    value = values[i].item()
+                    value = values[i]
+                    value = self.value_to_scalar(value)
                     self.cache[b.epd()] = [policy, value]
 
             policy, value = self.cache[epd]
@@ -86,6 +99,25 @@ class AbstractNet:
 
         # return the values
         return policy, value
+
+    def bulk_eval(self, boards, softmax_temp=1.61):
+
+        retval_p = []
+        retval_v = []
+
+        policies, values = self.process_boards(boards)
+
+        with torch.no_grad():
+            for i, b in enumerate(boards):
+                inp = policies[i].unsqueeze(dim=0)
+                policy = policy2moves(b, inp, softmax_temp=softmax_temp)
+                value = values[i]
+                value = self.value_to_scalar(value)
+                retval_p.append(policy)
+                retval_v.append(value)
+                self.cache[b.epd()] = [policy, value]
+
+        return retval_p, retval_v
 
 class LoadedNet(AbstractNet):
     def __init__(self, path, channels=128, blocks=10, se=4, policy_channels=None, classical=True, cuda=True):

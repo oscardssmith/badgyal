@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from time import time
 from math import exp
-from policy_index import policy_index
+from badgyal.policy_index import policy_index
 
 MOVE_MAP = dict(list(zip(policy_index, range(len(policy_index)))))
 
@@ -114,7 +114,7 @@ def policy2moves(board_, policy_tensor, softmax_temp = 1.61):
             fixed_uci = "e1a1"
         if (uci[-1] == "n"):
             # we are promoting to knight, so trim the character
-            fixed_uci = uci[0:-1]#
+            fixed_uci = uci[0:-1]
         # now mirror the uci
         if not board_.turn:
             uci = mirrorMove(m).uci()
