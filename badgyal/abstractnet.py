@@ -7,16 +7,17 @@ from badgyal.board2planes import board2planes, policy2moves, bulk_board2planes
 import pylru
 import sys
 import os
-
+import numpy as np
+from collections import defaultdict
 
 
 CACHE=100000
 MAX_BATCH = 8
 MIN_POLICY=0.2
+WDL = np.array([-1., 0., 1.])
 
 
 class AbstractNet:
-
     def __init__(self, cuda=True):
         self.net = self.load_net()
         self.cuda = cuda
@@ -59,6 +60,8 @@ class AbstractNet:
             return None, None
 
     def value_to_scalar(self, value):
+        if not self.classical:
+            return np.dot(WDL, value)
         return value.item()
 
     def eval(self, board, softmax_temp=1.61):
@@ -150,12 +153,28 @@ class MultiNet(AbstractNet):
     def __init__(self, nets):
         self.nets = nets
     
+    def __call__(self, cuda=True):
+        self.nets = [net(cuda=cuda) for net in self.nets]
+        return self
+        
     def eval(self, board, softmax_temp=1.61):
+        num_nets = len(self.nets)
+        policy_avg = defaultdict(float)
+        value_tot = 0
         for net in self.nets:
             policy, value = net.eval(board, softmax_temp)
-            print(policy)
+            value_tot += value
+            for move, p in policy.items():
+                policy_avg[move] += p
+        for move in policy_avg.keys():
+            policy_avg[move] /= num_nets
+        return policy_avg, value_tot/num_nets
             
 
     def bulk_eval(self, boards, softmax_temp=1.61):
+        num_nets = len(self.nets)
+        policy_avg = defaultdict(float)
+        value_tot = 0
         for net in self.nets:
-            policies, values = net.eval(boards, softmax_temp)
+            policies, values = net.bulk_eval(boards, softmax_temp)
+            print(policies, values)
