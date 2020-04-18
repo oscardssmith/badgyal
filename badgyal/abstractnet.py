@@ -7,14 +7,12 @@ from badgyal.board2planes import board2planes, policy2moves, bulk_board2planes
 import pylru
 import sys
 import os
-import numpy as np
 from collections import defaultdict
 
 
 CACHE=100000
 MAX_BATCH = 8
 MIN_POLICY=0.2
-WDL = np.array([-1., 0., 1.])
 
 
 class AbstractNet:
@@ -60,8 +58,6 @@ class AbstractNet:
             return None, None
 
     def value_to_scalar(self, value):
-        if not self.classical:
-            return np.dot(WDL, value)
         return value.item()
 
     def eval(self, board, softmax_temp=1.61):
@@ -148,6 +144,20 @@ class LoadedNet(AbstractNet):
         else:
             net.import_proto(full_path)
         return net
+    
+    
+    def value_to_scalar(self, value):
+        if not self.classical:
+            wdl0 = value[0].item()
+            wdl1 = value[1].item()
+            wdl2 = value[2].item()
+            min_val = min(wdl0, wdl1, wdl2)
+            w_val = math.exp(wdl0 - min_val)
+            d_val = math.exp(wdl1 - min_val)
+            l_val = math.exp(wdl2 - min_val)
+            p = (w_val * 1.0 + d_val * 0.5 ) / (w_val + d_val + l_val)
+            return 2.0*p-1.0;
+        return value.item()
 
 class MultiNet(AbstractNet):
     def __init__(self, nets):
