@@ -175,33 +175,3 @@ class LoadedNet(AbstractNet):
             p = (w_val * 1.0 + d_val * 0.5 ) / (w_val + d_val + l_val)
             return 2.0*p-1.0;
         return value.item()
-
-class MultiNet(AbstractNet):
-    def __init__(self, nets):
-        self.nets = nets
-    
-    def __call__(self, cuda=True):
-        self.nets = [net(cuda=cuda) for net in self.nets]
-        return self
-        
-    def eval(self, board, softmax_temp=1.61):
-        num_nets = len(self.nets)
-        policy_avg = defaultdict(float)
-        value_tot = 0
-        for net in self.nets:
-            policy, value = net.eval(board, softmax_temp)
-            value_tot += value
-            for move, p in policy.items():
-                policy_avg[move] += p
-        for move in policy_avg.keys():
-            policy_avg[move] /= num_nets
-        return policy_avg, value_tot/num_nets
-            
-
-    def bulk_eval(self, boards, softmax_temp=1.61):
-        num_nets = len(self.nets)
-        policy_avg = defaultdict(float)
-        value_tot = 0
-        for net in self.nets:
-            policies, values = net.bulk_eval(boards, softmax_temp)
-            print(policies, values)
