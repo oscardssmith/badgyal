@@ -8,7 +8,7 @@ import pylru
 import sys
 import os
 from collections import defaultdict
-
+import math
 
 CACHE=100000
 MAX_BATCH = 8
@@ -200,9 +200,21 @@ class MultiNet(AbstractNet):
             
 
     def bulk_eval(self, boards, softmax_temp=1.61):
+        num_boards = len(boards)
         num_nets = len(self.nets)
-        policy_avg = defaultdict(float)
-        value_tot = 0
+        policy_avg = [defaultdict(float) for _ in range(num_boards)]
+        value_tot = [0. for _ in range(num_boards)]
         for net in self.nets:
             policies, values = net.bulk_eval(boards, softmax_temp)
-            print(policies, values)
+            for i, value in enumerate(values):
+                value_tot[i] += value
+            for i, policy in enumerate(policies):
+                for move, p in policy.items():
+                    policy_avg[i][move] +=p
+        for i in range(num_boards):
+            value_tot[i] /= num_boards
+            
+        for i in range(num_boards):
+            for move in policy_avg[i].keys():
+                policy_avg[i][move] /= num_nets
+        return policy_avg, value_tot
