@@ -145,3 +145,17 @@ class LoadedNet(AbstractNet):
         else:
             net.import_proto(full_path)
         return net
+
+class MultiNet(AbstractNet):
+    def __init__(self, nets):
+        self.nets = nets
+    
+    def eval(self, board, softmax_temp=1.61):
+        for net in self.nets:
+            policy, value = net.eval(board, softmax_temp)
+            print(policy)
+            
+
+    def bulk_eval(self, boards, softmax_temp=1.61):
+        for net in self.nets:
+            policies, values = net.eval(boards, softmax_temp)
